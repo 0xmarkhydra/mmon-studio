@@ -7,22 +7,20 @@ function basename(filePath = '') {
 }
 
 export default function App() {
-  const [policies, setPolicies] = useState({});
-  const [platform, setPlatform] = useState('tiktok-shop-vn');
+  const [profiles, setProfiles] = useState({});
+  const [platform, setPlatform] = useState('tiktok');
   const [videoPath, setVideoPath] = useState('');
   const [rtmpUrl, setRtmpUrl] = useState('');
   const [streamKey, setStreamKey] = useState('');
   const [quality, setQuality] = useState('720p');
-  const [rightsConfirmed, setRightsConfirmed] = useState(false);
-  const [disclosureConfirmed, setDisclosureConfirmed] = useState(true);
-  const [destinationAllowsReplay, setDestinationAllowsReplay] = useState(false);
+  const [showReplayLabel, setShowReplayLabel] = useState(false);
   const [ffmpeg, setFfmpeg] = useState({ ok: false, checking: true });
   const [status, setStatus] = useState({ state: 'idle' });
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.getPolicies().then(setPolicies);
+    api.getPolicies().then(setProfiles);
     api.checkFfmpeg().then((result) => setFfmpeg({ ...result, checking: false }));
     const offStatus = api.onStatus((next) => setStatus(next));
     const offLog = api.onLog((line) => setLogs((items) => [...items.slice(-80), line]));
@@ -32,16 +30,12 @@ export default function App() {
     };
   }, []);
 
-  const policy = policies[platform];
-  const blocked = policy?.replayAllowed === false;
-  const needsCustomConfirm = policy?.replayAllowed === 'confirm';
+  const profile = profiles[platform];
   const isLive = status.state === 'live' || status.state === 'starting';
 
   const canStart = useMemo(() => {
-    if (!policy || blocked || isLive || !videoPath || !rtmpUrl || !streamKey || !rightsConfirmed || !disclosureConfirmed) return false;
-    if (needsCustomConfirm && !destinationAllowsReplay) return false;
-    return ffmpeg.ok;
-  }, [policy, blocked, isLive, videoPath, rtmpUrl, streamKey, rightsConfirmed, disclosureConfirmed, needsCustomConfirm, destinationAllowsReplay, ffmpeg.ok]);
+    return Boolean(ffmpeg.ok && !isLive && videoPath && rtmpUrl && streamKey);
+  }, [ffmpeg.ok, isLive, videoPath, rtmpUrl, streamKey]);
 
   async function chooseVideo() {
     const selected = await api.selectVideo();
@@ -61,9 +55,7 @@ export default function App() {
         rtmpUrl,
         streamKey,
         quality,
-        rightsConfirmed,
-        disclosureConfirmed,
-        destinationAllowsReplay
+        showReplayLabel
       });
     } catch (err) {
       setError(err?.message || String(err));
@@ -83,8 +75,8 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <div className="brand-row"><span className="brand-dot" /> MMON Studio <span className="version">MVP 0.1</span></div>
-          <p>Compliance-first replay broadcaster</p>
+          <div className="brand-row"><span className="brand-dot" /> MMON Studio <span className="version">MVP 0.2</span></div>
+          <p>Local video → RTMP/RTMPS replay studio</p>
         </div>
         <div className={`status-pill ${isLive ? 'live' : ''}`}>
           <span className="status-dot" /> {status.state === 'starting' ? 'CONNECTING' : status.state.toUpperCase()}
@@ -102,16 +94,13 @@ export default function App() {
 
           <div className="field-row">
             <label>
-              Platform profile
-              <select value={platform} onChange={(e) => {
-                setPlatform(e.target.value);
-                setDestinationAllowsReplay(false);
-              }}>
-                {Object.entries(policies).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
+              Output profile
+              <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
+                {Object.entries(profiles).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
               </select>
             </label>
             <label>
-              Output
+              Quality
               <select value={quality} onChange={(e) => setQuality(e.target.value)}>
                 <option value="720p">720p · 2.5 Mbps</option>
                 <option value="1080p">1080p · 4.5 Mbps</option>
@@ -120,11 +109,11 @@ export default function App() {
           </div>
 
           <div className="preview-card">
-            <div className="preview-badge">REPLAY · PRE-RECORDED</div>
+            {showReplayLabel && <div className="preview-badge">REPLAY · PRE-RECORDED</div>}
             <div className="preview-center">
               <div className="preview-play">▶</div>
               <strong>{videoPath ? 'Source ready' : 'No source selected'}</strong>
-              <span>Watermark disclosure được burn trực tiếp vào output bằng FFmpeg.</span>
+              <span>Video được FFmpeg đọc theo thời gian thực và loop liên tục.</span>
             </div>
           </div>
         </section>
@@ -140,30 +129,20 @@ export default function App() {
             <input type="password" value={streamKey} onChange={(e) => setStreamKey(e.target.value)} placeholder="••••••••••••••••" autoComplete="off" />
           </label>
 
-          <div className={`policy-card ${blocked ? 'blocked' : 'allowed'}`}>
+          <div className="policy-card allowed">
             <div className="policy-head">
-              <strong>{blocked ? 'Replay blocked' : 'Compliance profile'}</strong>
-              <span>{policy?.label || 'Loading…'}</span>
+              <strong>RTMP profile</strong>
+              <span>{profile?.label || 'Loading…'}</span>
             </div>
-            <p>{policy?.reason}</p>
-            <small>{policy?.reference}</small>
+            <p>{profile?.note || 'Generic RTMP output.'}</p>
+            <small>MMON Studio does not implement platform-detection bypass or moderation evasion.</small>
           </div>
 
           <div className="checklist">
             <label className="check-row">
-              <input type="checkbox" checked={rightsConfirmed} onChange={(e) => setRightsConfirmed(e.target.checked)} />
-              <span><strong>Tôi có quyền sử dụng toàn bộ video/âm thanh/nhạc</strong><small>Không stream nội dung copy, phim, TV, nhạc hoặc livestream của người khác nếu chưa có quyền.</small></span>
+              <input type="checkbox" checked={showReplayLabel} onChange={(e) => setShowReplayLabel(e.target.checked)} />
+              <span><strong>Burn nhãn REPLAY / PRE-RECORDED</strong><small>Tùy chọn. Khi bật, FFmpeg sẽ chèn nhãn trực tiếp vào hình.</small></span>
             </label>
-            <label className="check-row locked">
-              <input type="checkbox" checked={disclosureConfirmed} onChange={(e) => setDisclosureConfirmed(e.target.checked)} />
-              <span><strong>Hiển thị nhãn REPLAY / PRE-RECORDED</strong><small>MMON Studio burn nhãn này vào output để tránh gây hiểu nhầm đây là hình ảnh thời gian thực.</small></span>
-            </label>
-            {needsCustomConfirm && (
-              <label className="check-row">
-                <input type="checkbox" checked={destinationAllowsReplay} onChange={(e) => setDestinationAllowsReplay(e.target.checked)} />
-                <span><strong>Nền tảng đích cho phép phát nội dung quay sẵn</strong><small>Tôi đã tự kiểm tra chính sách hiện hành của nền tảng RTMP đích.</small></span>
-              </label>
-            )}
           </div>
 
           <div className="runtime-row">
@@ -175,7 +154,7 @@ export default function App() {
 
           <div className="action-row">
             <button className="secondary" onClick={stop} disabled={!isLive}>Stop</button>
-            <button className="primary" onClick={start} disabled={!canStart}>{blocked ? 'Replay disabled' : isLive ? 'Streaming…' : 'Start replay'}</button>
+            <button className="primary" onClick={start} disabled={!canStart}>{isLive ? 'Streaming…' : 'Start replay'}</button>
           </div>
         </section>
       </main>
