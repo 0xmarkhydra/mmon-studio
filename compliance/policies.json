@@ -1,0 +1,17 @@
+{
+  "tiktok": {
+    "label": "TikTok / RTMP",
+    "replayAllowed": true,
+    "note": "Generic RTMP output profile. MMON Studio does not attempt to determine or bypass destination-platform enforcement."
+  },
+  "youtube": {
+    "label": "YouTube / RTMP",
+    "replayAllowed": true,
+    "note": "Generic RTMP output profile. Check the destination platform rules for your own use case."
+  },
+  "custom-rtmp": {
+    "label": "Custom RTMP",
+    "replayAllowed": true,
+    "note": "Generic RTMP/RTMPS output."
+  }
+}
