@@ -60,26 +60,79 @@ function validateStart(config) {
   return policies[config.platform] || policies['custom-rtmp'];
 }
 
-function buildArgs(config) {
-  const quality = config.quality === '1080p'
-    ? { height: 1080, rate: '4500k', buffer: '9000k' }
-    : { height: 720, rate: '2500k', buffer: '5000k' };
-
-  const filters = [`scale=-2:${quality.height}`];
-  if (config.showReplayLabel === true) {
-    filters.unshift("drawtext=text='REPLAY - PRE-RECORDED':fontcolor=white:fontsize=28:box=1:boxcolor=black@0.65:boxborderw=12:x=24:y=24");
+function encoderProfile(config) {
+  if (config.platform === 'tiktok') {
+    return {
+      width: 1080,
+      height: 1920,
+      fps: 25,
+      videoRate: '2500k',
+      buffer: '5000k',
+      audioRate: '160k',
+      sampleRate: '48000'
+    };
   }
 
+  const height = config.quality === '1080p' ? 1080 : 720;
+  return {
+    width: null,
+    height,
+    fps: 30,
+    videoRate: height === 1080 ? '4500k' : '2500k',
+    buffer: height === 1080 ? '9000k' : '5000k',
+    audioRate: '160k',
+    sampleRate: '48000'
+  };
+}
+
+function videoFilters(config, profile) {
+  const filters = [];
+
+  if (config.showReplayLabel === true) {
+    filters.push("drawtext=text='REPLAY - PRE-RECORDED':fontcolor=white:fontsize=28:box=1:boxcolor=black@0.65:boxborderw=12:x=24:y=24");
+  }
+
+  if (profile.width) {
+    filters.push(
+      `scale=${profile.width}:${profile.height}:force_original_aspect_ratio=decrease`,
+      `pad=${profile.width}:${profile.height}:(ow-iw)/2:(oh-ih)/2:black`
+    );
+  } else {
+    filters.push(`scale=-2:${profile.height}`);
+  }
+
+  return filters.join(',');
+}
+
+function buildArgs(config) {
+  const profile = encoderProfile(config);
+  const keyframeInterval = profile.fps * 2;
   const output = `${String(config.rtmpUrl).replace(/\/$/, '')}/${String(config.streamKey).trim()}`;
 
   return [
     '-hide_banner', '-nostdin', '-loglevel', 'info',
     '-re', '-stream_loop', '-1', '-i', config.videoPath,
-    '-vf', filters.join(','),
-    '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
-    '-maxrate', quality.rate, '-bufsize', quality.buffer, '-g', '60',
-    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
-    '-f', 'flv', output
+    '-vf', videoFilters(config, profile),
+    '-r', String(profile.fps),
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-tune', 'zerolatency',
+    '-pix_fmt', 'yuv420p',
+    '-profile:v', 'high',
+    '-b:v', profile.videoRate,
+    '-minrate', profile.videoRate,
+    '-maxrate', profile.videoRate,
+    '-bufsize', profile.buffer,
+    '-g', String(keyframeInterval),
+    '-keyint_min', String(keyframeInterval),
+    '-sc_threshold', '0',
+    '-c:a', 'aac',
+    '-b:a', profile.audioRate,
+    '-ar', profile.sampleRate,
+    '-ac', '2',
+    '-f', 'flv',
+    '-flvflags', 'no_duration_filesize',
+    output
   ];
 }
 
