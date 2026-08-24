@@ -1,23 +1,17 @@
 {
-  "tiktok-shop-vn": {
-    "label": "TikTok Shop Vietnam",
-    "replayAllowed": false,
-    "requiresDisclosure": true,
-    "reason": "TikTok Shop Vietnam states that livestreams must be real-time and that pre-recorded livestreams/videos are reproduced or unoriginal content.",
-    "reference": "TikTok Shop Academy / Non-Interactive Content & Unoriginal Content (checked 2026-08-25)"
+  "tiktok": {
+    "label": "TikTok / RTMP",
+    "replayAllowed": true,
+    "note": "Generic RTMP output profile. MMON Studio does not attempt to determine or bypass destination-platform enforcement."
   },
   "youtube": {
-    "label": "YouTube Live",
+    "label": "YouTube / RTMP",
     "replayAllowed": true,
-    "requiresDisclosure": true,
-    "reason": "Replay broadcasting is only enabled when the broadcaster confirms all necessary content/music rights and clearly discloses that the source is pre-recorded. YouTube may restrict repetitive/inauthentic content and scans live streams for copyrighted third-party material.",
-    "reference": "YouTube Help / Live streaming, Copyright, Channel monetization policies (checked 2026-08-25)"
+    "note": "Generic RTMP output profile. Check the destination platform rules for your own use case."
   },
   "custom-rtmp": {
     "label": "Custom RTMP",
-    "replayAllowed": "confirm",
-    "requiresDisclosure": true,
-    "reason": "MMON Studio cannot infer the destination platform rules. Replay starts only after you confirm that the destination permits pre-recorded broadcasting.",
-    "reference": "Destination platform policy must be checked by the broadcaster"
+    "replayAllowed": true,
+    "note": "Generic RTMP/RTMPS output."
   }
 }
