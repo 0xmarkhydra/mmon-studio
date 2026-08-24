@@ -49,34 +49,33 @@ function ffmpegAvailable() {
 
 function validateStart(config) {
   if (!config || typeof config !== 'object') throw new Error('Invalid stream configuration.');
-  const policy = policies[config.platform];
-  if (!policy) throw new Error('Unknown platform profile.');
-  if (policy.replayAllowed === false) throw new Error(`${policy.label}: replay mode is blocked by the compliance guard.`);
-  if (policy.replayAllowed === 'confirm' && config.destinationAllowsReplay !== true) {
-    throw new Error('Confirm that the destination platform permits pre-recorded/replay broadcasts.');
-  }
-  if (config.rightsConfirmed !== true) throw new Error('Confirm that you own or have permission for all video, audio and music used.');
-  if (policy.requiresDisclosure && config.disclosureConfirmed !== true) throw new Error('Replay disclosure must remain enabled.');
   if (!config.videoPath || !fs.existsSync(config.videoPath)) throw new Error('Select a valid local video file.');
   if (!/^rtmps?:\/\//i.test(config.rtmpUrl || '')) throw new Error('RTMP server URL must start with rtmp:// or rtmps://');
   if (!config.streamKey || String(config.streamKey).trim().length < 3) throw new Error('Stream key is required.');
   if (ffmpegProcess) throw new Error('A broadcast is already running.');
+
   const ffmpeg = ffmpegAvailable();
   if (!ffmpeg.ok) throw new Error(ffmpeg.error);
-  return policy;
+
+  return policies[config.platform] || policies['custom-rtmp'];
 }
 
 function buildArgs(config) {
   const quality = config.quality === '1080p'
     ? { height: 1080, rate: '4500k', buffer: '9000k' }
     : { height: 720, rate: '2500k', buffer: '5000k' };
-  const overlay = "drawtext=text='REPLAY - PRE-RECORDED':fontcolor=white:fontsize=28:box=1:boxcolor=black@0.65:boxborderw=12:x=24:y=24";
+
+  const filters = [`scale=-2:${quality.height}`];
+  if (config.showReplayLabel === true) {
+    filters.unshift("drawtext=text='REPLAY - PRE-RECORDED':fontcolor=white:fontsize=28:box=1:boxcolor=black@0.65:boxborderw=12:x=24:y=24");
+  }
+
   const output = `${String(config.rtmpUrl).replace(/\/$/, '')}/${String(config.streamKey).trim()}`;
 
   return [
     '-hide_banner', '-nostdin', '-loglevel', 'info',
     '-re', '-stream_loop', '-1', '-i', config.videoPath,
-    '-vf', `${overlay},scale=-2:${quality.height}`,
+    '-vf', filters.join(','),
     '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
     '-maxrate', quality.rate, '-bufsize', quality.buffer, '-g', '60',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
@@ -97,14 +96,14 @@ ipcMain.handle('studio:get-policies', () => policies);
 ipcMain.handle('studio:check-ffmpeg', () => ffmpegAvailable());
 
 ipcMain.handle('studio:start-stream', (_event, config) => {
-  const policy = validateStart(config);
+  const profile = validateStart(config);
   activeSecret = String(config.streamKey).trim();
   const args = buildArgs(config);
   ffmpegProcess = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
 
-  emit('studio:status', { state: 'starting', platform: policy.label });
+  emit('studio:status', { state: 'starting', platform: profile.label });
   ffmpegProcess.stderr.on('data', (chunk) => emit('studio:log', redact(chunk.toString())));
-  ffmpegProcess.once('spawn', () => emit('studio:status', { state: 'live', platform: policy.label }));
+  ffmpegProcess.once('spawn', () => emit('studio:status', { state: 'live', platform: profile.label }));
   ffmpegProcess.once('error', (error) => emit('studio:status', { state: 'error', message: redact(error.message) }));
   ffmpegProcess.once('close', (code, signal) => {
     ffmpegProcess = null;
